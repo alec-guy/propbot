@@ -1,5 +1,5 @@
 # Propbot Commands
-
+![Prismo](https://github.com/user-attachments/assets/a888f552-d581-4ffa-8cb7-ffe096d42755)
 ## Overview
 Propbot is a tool for validating logical arguments and generating truth tables. Here are the available commands:
 
