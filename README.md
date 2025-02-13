@@ -1,15 +1,31 @@
-Propbot commands 
+# Propbot Commands
 
-!help  -- displays commands
+## Overview
+Propbot is a tool for validating logical arguments and generating truth tables. Here are the available commands:
 
-!check -- checks validity of argument
+## Commands
 
-!keyboard -- Outputs all logical operators with names
+### `!help`
+- **Description:** Displays a list of commands.
 
-!check syntax 
+### `!check`
+- **Description:** Checks the validity of an argument.
+- **Syntax:** `!check Premise1, Premise2, PremiseN..., [Therefore symbol] Conclusion`
+- **Example:** `!check P, P -> Q, % P`
 
-!check Premise1 , Premise2, PremiseN..., [Therefore symbol] Conclusion
+### `!keyboard`
+- **Description:** Outputs all logical operators with their names.
 
-Example: !check P , P -> Q, % P 
+### `!check syntax`
+- **Description:** Provides information on how to use the `!check` command properly.
 
-Therefore symbols: [Therefore,therefore, % , ∴]
+## Symbols for "Therefore"
+- `Therefore`
+- `therefore`
+- `%`
+- `∴`
+
+## Examples
+- **Basic Check:**
+  ```bash
+  !check P, P -> Q, % P
