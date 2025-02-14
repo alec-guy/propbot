@@ -35,6 +35,7 @@ import qualified Text.Blaze.Html5 as H
 import qualified Text.Blaze.Html5.Attributes as HA  
 import Text.Blaze.Html.Renderer.Text
 import qualified Text.Blaze as Blaze
+import Data.String (fromString)
 import System.Process 
 import Data.ByteString as BS
 
@@ -49,7 +50,7 @@ main =  Di.new $ \di ->
      . runMetricsNoop 
      . useFullContext
      . (useConstantPrefix "!") 
-     . runBotIO (BotToken "") defaultIntents
+     . runBotIO (BotToken "Token is hidden for security") defaultIntents
      $ do
         DiPolysemy.info @T.Text "Setting up commands and handlers.."  
         addCommands $ do
@@ -69,18 +70,16 @@ main =  Di.new $ \di ->
                                void $ P.embed  $ TIO.writeFile "index.html" (TL.toStrict $ renderHtml html') 
                                void $ P.embed $ (callProcess "wkhtmltoimage" [ "index.html", "table.jpg"])
                                tableBS <- P.embed $ BS.readFile "table.jpg"
-                               void $ tell ctx (intoMsg $ messageOptions tableBS (validity tt))
+                               void $ tell ctx (intoMsg $ messageOptions tableBS )
                                
 
-messageOptions :: ByteString -> Validity -> CreateMessageOptions
-messageOptions bs v = CreateMessageOptions 
-                  { content = Just $ "Truth-Table" <> "\n" <> "Validity: " <> 
-                                       ((\v -> if v == Valid then "This Argument is Deductively Valid" :: T.Text else "This Argument is Deductively Invalid" :: T.Text) v) <> 
-                                           (if v == Valid then " ✅" else " ❌") 
+messageOptions :: ByteString -> CreateMessageOptions
+messageOptions bs = CreateMessageOptions 
+                  { content = Nothing
                   , nonce = Nothing
                   , tts   = Nothing
                   , attachments = Just $ [CreateMessageAttachment{filename = "table.png",description = Just "Truth-table", content = BS.fromStrict bs}]
-                  , embeds = Nothing
+                  , embeds =Nothing 
                   , allowedMentions = Nothing
                   , messageReference = Nothing
                   , components  = Nothing
@@ -95,10 +94,34 @@ webpage table = do
      
 ttToHtml :: TruthTable -> H.Html  
 ttToHtml tt = 
-   let table = (  
+   let headers' = case headers tt of 
+                   Headers{variables=v,prems=ps,conc=conclusionn} -> 
+                        H.tr 
+                        $ 
+                        (H.th (toHtml ("Variables" :: T.Text))) Blaze.! (HA.colspan (fromString $ (show $ (L.length v) )))
+                        <> 
+                        (H.th (toHtml ("Premises" :: T.Text))) Blaze.! (HA.colspan (fromString $ (show $ ((L.length ps)) ) ))
+                        <> 
+                        (H.th (toHtml ("Conclusion" :: T.Text))) Blaze.! (HA.colspan "1")
+       
+       table = (  
                H.table
-               $ H.tr (mconcat $ [(H.th $ toHtml $ T.unpack h) | h <- (headers tt)]) 
-               <> mconcat [H.tr $ mconcat cells 
+               $ 
+               H.thead 
+               $ 
+               (
+               headers'
+               <> H.tr (mconcat $ [(H.th $ toHtml $ T.unpack v) Blaze.! (HA.style "min-width: 80px") | v <- (variables $ headers tt)] 
+                                  <> 
+                                  [(H.th $ toHtml $ T.unpack p) Blaze.! (HA.style "min-width: 120px") | p <- (prems $ headers tt)]
+                                  <> 
+                                  [((H.th $ toHtml $ T.unpack (conc $ headers tt)) Blaze.! (HA.style "min-width: 100"))]
+                       )
+               ) 
+               <> 
+               (
+               H.tbody 
+               $ mconcat  [H.tr $ mconcat cells 
                           | cells <- [ [let cellContent = (H.td $ toHtml $ if c == '1' then "True" :: T.Text else "False" :: T.Text) 
                                         in if trueprems then cellContent Blaze.! (HA.class_ "trueprems") else cellContent
                                        | c <- (T.unpack r) 
@@ -106,6 +129,7 @@ ttToHtml tt =
                                      | (r, trueprems) <- (rows tt) 
                                      ] 
                           ]
+               )
 
                )
-    in table
+    in  (H.h2 $ toHtml ("This Argument is Deductively " <> (T.pack $ show $ validity tt))  ) <> table
