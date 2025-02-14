@@ -35,9 +35,16 @@ data Argument = Argument
               , conclusion :: Proposition
               } deriving (Show, Eq)  
 
-data TruthTable  = TT {headers :: [Text], rows :: [(Text,Bool)], validity :: Validity} deriving (Eq) 
-    
-data Validity = Valid | Invalid deriving (Eq) 
+data TruthTable  = TT {headers :: Headers, rows :: [(Text,Bool)], validity :: Validity} deriving (Eq) 
+
+data Headers = Headers 
+             {variables :: [Text] 
+             ,prems :: [Text]
+             ,conc :: Text 
+             }
+             deriving Eq
+
+data Validity = Valid | Invalid deriving (Eq, Show) 
 
 keyboard :: Text 
 keyboard = "Negation: ¬" 
@@ -118,7 +125,11 @@ makeTruthTable arg =
        varRows      = (Prelude.map (gen vars) combos)
        rows'        = (f arg) <$> varRows 
    in TT 
-      { headers = (T.pack <$> L.singleton <$> (T.unpack vars)) ++ (Prelude.map (\t -> "Premise:\n" <> showProp t ) (premises arg)) ++ ["Conclusion: \n" <> showProp (conclusion arg)] 
+      { headers = Headers
+                { variables = (T.pack <$> L.singleton <$> (T.unpack vars))
+                , prems     = (Prelude.map showProp(premises arg))
+                , conc      = showProp (conclusion arg)
+                }
       , rows    =  rows'
       , validity = let removedVars = (L.drop (T.length vars)) <$> (T.unpack <$> fst <$> rows')
                        removeLastEl = (\l -> (\l2 -> (l2, L.last l)) . L.reverse . (L.drop 1) . L.reverse $ l) <$> removedVars  
