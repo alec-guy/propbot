@@ -8,7 +8,7 @@ import Text.Megaparsec.Char.Lexer as L
 import Control.Monad.Combinators as CM
 import Control.Monad.Combinators.Expr
 -- import Control.Lens 
-import Data.Text 
+import Data.Text as T
 import Data.Void 
 import Control.Monad (void) 
 import Text.Megaparsec.Error 
@@ -40,9 +40,9 @@ term :: Parser Proposition
 term = lexer (parens expr <|> variable)
 
 table :: [[Operator Parser Proposition]]
-table = [[Prefix (Not <$ (CM.choice  $ (lexer . string) <$> ["~", "¬", "!", "′"]))]
-        ,[InfixR (And <$ (CM.choice $ (lexer . string) <$> ["&", "∧", "·"]))
-         ,InfixR (Or <$ (CM.choice $ (lexer . string) <$> ["||", "∨" ,"+", "∥"]))
+table = [[Prefix (Not <$ (CM.choice  $ (lexer . string) <$> ["~", "¬", "!", "′" , "not"]))]
+        ,[InfixR (And <$ (CM.choice $ (lexer . string) <$> ["&", "∧", "·", "and"]))
+         ,InfixR (Or <$ (CM.choice $ (lexer . string) <$> ["||", "∨" ,"+", "∥", "or"]))
          ,InfixR (If <$ (CM.choice $ (lexer . string) <$> ["->", "→", "⇒", "⊃"]))
          ,InfixR (Xor <$ (CM.choice $ (lexer . string) <$> ["xor", "XOR" , "⊻", "⊕", "↮", "≢"]))
          ,InfixR (Nand <$ (CM.choice $ (lexer . string) <$> ["nand", "NAND", "⊼"]))
@@ -63,14 +63,22 @@ parseArgument = do
    (eof <|> (void newline))
    return $ Argument {premises = prems, conclusion = conc}
 
-getArgument :: IO Argument
-getArgument = do
-   arg <- TIO.readFile "myarg.txt"
-   e   <- return (parse parseArgument "" arg)
-   case e of 
-    Left e    -> do 
-                  Prelude.putStrLn $ errorBundlePretty e 
-                  exitSuccess
-    Right arg -> return arg 
-  
+parseErrorMsg :: Parser String 
+parseErrorMsg = do 
+   input <- do
+      void $ skipManyTill (anySingle) newline 
+      void $ skipManyTill (anySingle) newline 
+      void $ lexer $ many alphaNumChar 
+      void $ lexer $ (string "|")
+      manyTill anySingle newline 
+   unexpectedThing <- manyTill anySingle (string "expecting")
+   case input of 
+      "<empty line>" -> return $ "Argument must have at least one premise and a conclusion\n"  <>
+                                  "Unexpected: " <> unexpectedThing <>
+                                  "Your input: " <> input 
+      _              ->
+         let wordsS = Prelude.words input 
+         in case (Prelude.all (== True)) $ (\t -> not $ t `Prelude.elem` wordsS) <$> ["therefore" , "Therefore","%","∴"] of 
+             True  -> return $ "Argument is missing a therefore symbol and\n" <> "unexpected " <> unexpectedThing <> "\nYour input " <> input
+             False -> return $ "Unexpected " <> unexpectedThing <> "\nYour input " <> input
    
