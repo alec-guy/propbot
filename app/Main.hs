@@ -50,17 +50,24 @@ main =  Di.new $ \di ->
      . runMetricsNoop 
      . useFullContext
      . (useConstantPrefix "!") 
-     . runBotIO (BotToken "Token is hidden for security") defaultIntents
+     . runBotIO (BotToken "Secret bot token") defaultIntents
      $ do
         DiPolysemy.info @T.Text "Setting up commands and handlers.."  
         addCommands $ do
           helpCommand
           Commands.command @'[] "keyboard" $ \ctx -> 
                void $ tell ctx (intoMsg keyboard)
-
+          {-
+          Commands.command @[[T.Text]] "equiv" $ \ctx -> expressions -> 
+              let response = case Megapars.parse parseEquiv "" (mconcat $ L.intersperse " " expressions) of 
+                              Left e      -> Left (errorBundlePretty e)
+                              Right expr -> 
+          -}
           Commands.command @'[[T.Text]] "check" $ \ctx argument -> 
               let truthtable = case Megapars.parse parseArgument "" (mconcat $ L.intersperse " " argument) of
-                                Left e    -> Left (errorBundlePretty e )
+                                Left e    -> case Megapars.parse parseErrorMsg "" (T.pack $ errorBundlePretty e) of
+                                              Left errr -> Left (errorBundlePretty errr)
+                                              Right m   -> Left m 
                                 Right arg -> Right (makeTruthTable arg)  
               in case truthtable of 
                   Left s -> void $ tell ctx (intoMsg $ T.pack s) 
