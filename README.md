@@ -34,3 +34,5 @@ Propbot is a tool for validating logical arguments and generating truth tables. 
   !check P, P -> Q, % P
 
 If I am offline its because I am working. 
+
+Installation link = https://discord.com/oauth2/authorize?client_id=1338255110798704736
