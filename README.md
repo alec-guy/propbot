@@ -32,3 +32,5 @@ Propbot is a tool for validating logical arguments and generating truth tables. 
 - **Basic Check:**
   ```bash
   !check P, P -> Q, % P
+
+If I am offline its because I am working. 
