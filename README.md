@@ -12,7 +12,10 @@ Propbot is a tool for validating logical arguments and generating truth tables. 
 - **Description:** Checks the validity of an argument.
 - **Syntax:** `!check Premise1, Premise2, PremiseN..., [Therefore symbol] Conclusion`
 - **Example:** `!check P, P -> Q, % P`
-
+### `!equiv` 
+- **Description:** Checks if two propositions are logically equivalent.
+- **Syntax:** `!check Prop1, Prop2`
+- **Example:** `!equiv P -> Q, not P or Q`
 ### `!keyboard`
 - **Description:** Outputs all logical operators with their names.
 
