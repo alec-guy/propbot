@@ -21,6 +21,13 @@ import System.Exit
 
 type Parser = Parsec Void Text 
 
+parseEquiv :: Parser (Proposition,Proposition)
+parseEquiv = do 
+   exp1 <- expr 
+   void $ lexer $ string ","
+   exp2 <- expr 
+   return $ (exp1, exp2)
+   
 spaceC :: Parser () 
 spaceC = L.space hspace1 CM.empty CM.empty 
 
@@ -57,6 +64,7 @@ parseTherefore = lexer $ CM.choice [string "%", string "∴", "therefore", "Ther
 parseConclusion = do
     void parseTherefore
     lexer expr 
+
 parseArgument :: Parser Argument
 parseArgument = do 
    (prems,conc) <- manyTill_ (expr <* (void $ lexer $ string ",") ) parseConclusion
@@ -79,6 +87,6 @@ parseErrorMsg = do
       _              ->
          let wordsS = Prelude.words input 
          in case (Prelude.all (== True)) $ (\t -> not $ t `Prelude.elem` wordsS) <$> ["therefore" , "Therefore","%","∴"] of 
-             True  -> return $ "Argument is missing a therefore symbol and\n" <> "unexpected " <> unexpectedThing <> "\nYour input " <> input
-             False -> return $ "Unexpected " <> unexpectedThing <> "\nYour input " <> input
+             True  -> return $ "Argument is missing a therefore symbol and\n" <> "unexpected " <> unexpectedThing <> "\nYour input: " <> input
+             False -> return $ "Unexpected " <> unexpectedThing <> "\nYour input: " <> input
    
