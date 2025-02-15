@@ -11,7 +11,7 @@ import Data.Text as T
 import Data.Text.IO as TIO
 import qualified Data.Text.Lazy as LT
 import Data.Set as Set 
-import Data.Map as Map
+--import Data.Map as Map
 import Control.Monad (replicateM,sequence_)
 import Data.Maybe (fromJust)  
 import Data.Text.IO as TIO
@@ -70,16 +70,18 @@ collectVars prop =
     (If  prop1 prop2)  -> (collectVars prop1) <> (collectVars prop2) 
     (Iff prop1 prop2)  -> (collectVars prop1) <> (collectVars prop2)  
     (Not prop)         -> collectVars prop
+parenthisize :: Text -> Text 
+parenthisize t = "( " <> t <> " )"
 
 showProp :: Proposition -> Text 
 showProp (Var c)           = T.singleton c 
-showProp (And prop1 prop2) = (showProp prop1) <> "&" <> (showProp prop2)
-showProp (Or prop1 prop2)  = (showProp prop1) <> "V" <> (showProp prop2) 
-showProp (Xor prop1 prop2) = (showProp prop1) <> "xor" <> (showProp prop2)
-showProp (Nand prop1 prop2) = (showProp prop1) <> "nand" <> (showProp prop2)
-showProp (Nor prop1 prop2)  = (showProp prop1) <> "nor" <> (showProp prop2)
-showProp (If prop1 prop2)  =  (showProp prop1) <> "->" <> (showProp prop2) 
-showProp (Iff prop1 prop2) =  (showProp prop1) <> "<->" <> (showProp prop2) 
+showProp (And prop1 prop2) = parenthisize $ (showProp prop1) <> " ∧ " <> (showProp prop2)
+showProp (Or prop1 prop2)  = parenthisize $ (showProp prop1) <> " ∨ " <> (showProp prop2) 
+showProp (Xor prop1 prop2) = parenthisize $ (showProp prop1) <> " ⊻ " <> (showProp prop2)
+showProp (Nand prop1 prop2) = parenthisize $ (showProp prop1) <> " ⊼ " <> (showProp prop2)
+showProp (Nor prop1 prop2)  = parenthisize $ (showProp prop1) <> " ⊽ " <> (showProp prop2)
+showProp (If prop1 prop2)  =  parenthisize $ (showProp prop1) <> " → " <> (showProp prop2) 
+showProp (Iff prop1 prop2) =  parenthisize $ (showProp prop1) <> " ↔ " <> (showProp prop2) 
 showProp (Not prop1)       = "~" <> (showProp prop1) 
 
 
@@ -164,7 +166,7 @@ makeTruthTable arg =
       } 
  
 
-
+{-
 emptyEmbed :: Embed
 emptyEmbed = Embed 
            { title = Nothing
@@ -181,5 +183,5 @@ emptyEmbed = Embed
            , author = Nothing
            , fields = [] 
            } 
-
+-}
             
