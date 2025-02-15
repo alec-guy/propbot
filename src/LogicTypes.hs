@@ -18,7 +18,6 @@ import Data.Text.IO as TIO
 import Calamity.Types.Model.Channel.Embed (Embed(..), EmbedImage(..))  
 import Data.List as L
 
-
 data Proposition = Var Char 
                  | And Proposition Proposition 
                  | Or Proposition Proposition
@@ -36,6 +35,9 @@ data Argument = Argument
               } deriving (Show, Eq)  
 
 data TruthTable  = TT {headers :: Headers, rows :: [(Text,Bool)], validity :: Validity} deriving (Eq) 
+data PropTable   = PT {headersP :: PTHeaders, rowsP :: [Text]} deriving (Eq)
+
+data PTHeaders = HeadersP {variablesP :: [Text], propositions :: (Text,Text)} deriving (Eq)
 
 data Headers = Headers 
              {variables :: [Text] 
@@ -117,7 +119,25 @@ f :: Argument -> [(Char,Char)] -> (Text, Bool)
 f arg varEvals = 
   let prems = (evalPremises (premises arg) varEvals)  
   in ((fromVarEval varEvals) <> prems <> (evalPremises ([conclusion arg]) varEvals) , T.all (== '1') prems)
-          
+
+
+fromEquiv :: (Proposition, Proposition) -> (PropTable, Bool)   
+fromEquiv (prop1, prop2)  = 
+       let props     =  [prop1,prop2]
+           vars      = T.pack $ Set.toList $ Set.fromList $ T.unpack $ mconcat $ collectVars <$> props 
+           combos    = replicateM (T.length vars) [True,False]
+           varRows   = (gen vars) <$> combos 
+           rows'     = (\varEval -> (fromVarEval varEval) <> (evalPremises props varEval)) <$> varRows
+           proptable = PT { headersP = HeadersP { variablesP = T.pack <$> L.singleton <$> (T.unpack vars)
+                                                , propositions = (showProp prop1, showProp prop2)
+                                                }
+                          , rowsP    = rows'
+                          }
+           equivalence = let removedVars = (L.drop (T.length vars)) <$> (T.unpack <$> rows')
+                         in  (L.all (== True)) $ (\r -> (L.all (== '1') r) || (L.all (== '0') r)) <$> removedVars
+       in (proptable, equivalence)
+      
+  
 makeTruthTable :: Argument -> TruthTable 
 makeTruthTable arg = 
    let vars         =  T.pack $ Set.toList $ Set.fromList $ T.unpack $ (mconcat $ Prelude.map collectVars ((conclusion arg) : premises arg)) 
