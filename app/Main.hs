@@ -50,19 +50,26 @@ main =  Di.new $ \di ->
      . runMetricsNoop 
      . useFullContext
      . (useConstantPrefix "!") 
-     . runBotIO (BotToken "Secret bot token") defaultIntents
+     . runBotIO (BotToken "Secret Bot Token is hidden") defaultIntents
      $ do
         DiPolysemy.info @T.Text "Setting up commands and handlers.."  
         addCommands $ do
           helpCommand
           Commands.command @'[] "keyboard" $ \ctx -> 
                void $ tell ctx (intoMsg keyboard)
-          {-
-          Commands.command @[[T.Text]] "equiv" $ \ctx -> expressions -> 
+          Commands.command @'[[T.Text]] "equiv" $ \ctx expressions -> 
               let response = case Megapars.parse parseEquiv "" (mconcat $ L.intersperse " " expressions) of 
-                              Left e      -> Left (errorBundlePretty e)
-                              Right expr -> 
-          -}
+                              Left e  -> Left (errorBundlePretty e)
+                              Right p -> Right $ ptToHtml $ fromEquiv p
+              in case response of 
+                  Left  s  -> void $ tell ctx (intoMsg $ T.pack s)
+                  Right ht -> do 
+                       html' <- P.embed $ webpage "proptable.css" ht 
+                       void $ P.embed  $ TIO.writeFile "proptable.html" (TL.toStrict $ renderHtml html')
+                       void $ P.embed $ (callProcess "wkhtmltoimage" [ "proptable.html", "proptable.jpg"])
+                       tableBS <- P.embed $ BS.readFile "proptable.jpg"
+                       void $ tell ctx (intoMsg $ messageOptions tableBS )
+
           Commands.command @'[[T.Text]] "check" $ \ctx argument -> 
               let truthtable = case Megapars.parse parseArgument "" (mconcat $ L.intersperse " " argument) of
                                 Left e    -> case Megapars.parse parseErrorMsg "" (T.pack $ errorBundlePretty e) of
@@ -73,7 +80,7 @@ main =  Di.new $ \di ->
                   Left s -> void $ tell ctx (intoMsg $ T.pack s) 
                   Right tt-> do
                                let table = ttToHtml tt
-                               html' <- P.embed $ webpage table
+                               html' <- P.embed $ webpage "table.css" table
                                void $ P.embed  $ TIO.writeFile "index.html" (TL.toStrict $ renderHtml html') 
                                void $ P.embed $ (callProcess "wkhtmltoimage" [ "index.html", "table.jpg"])
                                tableBS <- P.embed $ BS.readFile "table.jpg"
@@ -91,14 +98,49 @@ messageOptions bs = CreateMessageOptions
                   , messageReference = Nothing
                   , components  = Nothing
                   } 
-webpage :: H.Html -> IO H.Html
-webpage table = do 
-    css <- TIO.readFile "table.css"
+webpage :: FilePath -> H.Html -> IO H.Html
+webpage filename table = do 
+    css <- TIO.readFile filename
     return $ 
       H.docTypeHtml $ 
        (H.head $ H.style $ toHtml css) <> 
          (H.body table) 
-     
+
+ptToHtml :: (PropTable,Bool) -> H.Html 
+ptToHtml (proptable, equivalent) = 
+    let headers' = case (headersP proptable) of 
+                    (HeadersP{variablesP=v1,propositions = _})  -> 
+                        H.tr 
+                        $ 
+                        (H.th (toHtml ("Variables" :: T.Text))) Blaze.! (HA.colspan $ fromString $ show $ (L.length v1))
+                        <> 
+                        (H.th (toHtml ("Proposition" :: T.Text)) Blaze.! (HA.colspan "2"))
+        table    = H.table 
+                   $ 
+                   H.thead 
+                   $ 
+                   (
+                   headers' 
+                   <> H.tr (mconcat $ [(H.th $ toHtml $ T.unpack v) Blaze.! (HA.style "min-width: 80px") | v <- (variablesP $ headersP proptable)]  
+                                      <> 
+                                      [(H.th $ toHtml $ T.unpack (fst $ propositions $ headersP proptable)) Blaze.! (HA.style "min-width: 120px")
+                                      , (H.th $ toHtml $ T.unpack (snd $ propositions $ headersP proptable)) Blaze.! (HA.style "min-width: 120px")
+                                      ]
+                           )
+                   ) 
+                   <> 
+                   (
+                    H.tbody 
+                    $ mconcat [H.tr $ mconcat cells 
+                              | cells <- [ [let cellContent = (H.td $ toHtml $ if c == '1' then "True" :: T.Text else "False" :: T.Text) 
+                                            in  cellContent
+                                           | c <- (T.unpack r) 
+                                           ] 
+                                         | r <- ((rowsP proptable)) 
+                                         ] 
+                              ]
+               )
+    in (H.h2 $ toHtml ("These Propositions are Logicially " <> (if equivalent then "Equivalent" :: T.Text else "Inequivalent" :: T.Text))  ) <> table
 ttToHtml :: TruthTable -> H.Html  
 ttToHtml tt = 
    let headers' = case headers tt of 
