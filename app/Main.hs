@@ -13,6 +13,7 @@ module Main where
 import LogicTypes
 import Parser  
 import Data.Text.IO as TIO
+--import Data.Text.Internal.IO as TIIO
 import Data.Text as T
 import Data.Text.Lazy as TL 
 -- import Control.Lens 
@@ -38,10 +39,24 @@ import qualified Text.Blaze as Blaze
 import Data.String (fromString)
 import System.Process 
 import Data.ByteString as BS
+import System.IO 
+import Data.Word 
+import Data.Char (ord)
+import Data.Text.Encoding as E
+ 
+{-
+sToWords :: String -> [Word8]
+sToWords s = (fromIntegral . ord) <$> s
 
+sToBS :: String -> BS.ByteString 
+sToBS s = BS.pack $ sToWords s 
+-}
 -- Hello 
 main :: IO ()
-main =  Di.new $ \di -> 
+main =  do
+  hSetEncoding stdin utf8
+  hSetEncoding stdout utf8 
+  Di.new $ \di -> 
      void 
      . P.runFinal 
      . P.embedToFinal @IO  
@@ -50,8 +65,8 @@ main =  Di.new $ \di ->
      . runMetricsNoop 
      . useFullContext
      . (useConstantPrefix "!") 
-     . runBotIO (BotToken "Secret Bot Token is hidden") defaultIntents
-     $ do
+     . runBotIO (BotToken "") defaultIntents
+     $ do 
         DiPolysemy.info @T.Text "Setting up commands and handlers.."  
         addCommands $ do
           helpCommand
@@ -65,7 +80,7 @@ main =  Di.new $ \di ->
                   Left  s  -> void $ tell ctx (intoMsg $ T.pack s)
                   Right ht -> do 
                        html' <- P.embed $ webpage "proptable.css" ht 
-                       void $ P.embed  $ TIO.writeFile "proptable.html" (TL.toStrict $ renderHtml html')
+                       void $ P.embed  $ BS.writeFile "proptable.html" (E.encodeUtf8 $  TL.toStrict $ renderHtml html')
                        void $ P.embed $ (callProcess "wkhtmltoimage" [ "proptable.html", "proptable.jpg"])
                        tableBS <- P.embed $ BS.readFile "proptable.jpg"
                        void $ tell ctx (intoMsg $ messageOptions tableBS )
@@ -81,12 +96,11 @@ main =  Di.new $ \di ->
                   Right tt-> do
                                let table = ttToHtml tt
                                html' <- P.embed $ webpage "table.css" table
-                               void $ P.embed  $ TIO.writeFile "index.html" (TL.toStrict $ renderHtml html') 
+                               void $ P.embed  $ BS.writeFile "index.html" (E.encodeUtf8 $ TL.toStrict $ renderHtml html') 
                                void $ P.embed $ (callProcess "wkhtmltoimage" [ "index.html", "table.jpg"])
                                tableBS <- P.embed $ BS.readFile "table.jpg"
                                void $ tell ctx (intoMsg $ messageOptions tableBS )
                                
-
 messageOptions :: ByteString -> CreateMessageOptions
 messageOptions bs = CreateMessageOptions 
                   { content = Nothing
@@ -103,7 +117,7 @@ webpage filename table = do
     css <- TIO.readFile filename
     return $ 
       H.docTypeHtml $ 
-       (H.head $ H.style $ toHtml css) <> 
+       (H.head $ (H.style $ (toHtml css)) <> (H.meta Blaze.! (HA.charset "UTF-8")))  <> 
          (H.body table) 
 
 ptToHtml :: (PropTable,Bool) -> H.Html 
@@ -111,10 +125,10 @@ ptToHtml (proptable, equivalent) =
     let headers' = case (headersP proptable) of 
                     (HeadersP{variablesP=v1,propositions = _})  -> 
                         H.tr 
-                        $ 
+                        $
                         (H.th (toHtml ("Variables" :: T.Text))) Blaze.! (HA.colspan $ fromString $ show $ (L.length v1))
                         <> 
-                        (H.th (toHtml ("Proposition" :: T.Text)) Blaze.! (HA.colspan "2"))
+                        (H.th (toHtml ("Propositions" :: T.Text)) Blaze.! (HA.colspan "2"))
         table    = H.table 
                    $ 
                    H.thead 
