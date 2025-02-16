@@ -1,188 +1,100 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DuplicateRecordFields #-}  
+{-# LANGUAGE OverloadedStrings #-} 
 
-module LogicTypes where 
+module Parser where 
 
--- import Control.Lens
-
-
-
+import Text.Megaparsec 
+import Text.Megaparsec.Char 
+import Text.Megaparsec.Char.Lexer as L
+import Control.Monad.Combinators as CM
+import Control.Monad.Combinators.Expr
+import Text.Megaparsec.Debug as D
+-- import Control.Lens 
 import Data.Text as T
+import Data.Void 
+import Control.Monad (void) 
+import Text.Megaparsec.Error 
+
+import System.IO 
 import Data.Text.IO as TIO
-import qualified Data.Text.Lazy as LT
-import Data.Set as Set 
---import Data.Map as Map
-import Control.Monad (replicateM,sequence_)
-import Data.Maybe (fromJust)  
-import Data.Text.IO as TIO
-import Calamity.Types.Model.Channel.Embed (Embed(..), EmbedImage(..))  
-import Data.List as L
 
-data Proposition = Var Char 
-                 | And Proposition Proposition 
-                 | Or Proposition Proposition
-                 | Xor Proposition Proposition
-                 | If Proposition Proposition
-                 | Iff Proposition Proposition
-                 | Not Proposition
-                 | Nor Proposition Proposition 
-                 | Nand Proposition Proposition
-                 deriving (Eq, Show) 
+import LogicTypes 
+import System.Exit 
 
-data Argument = Argument 
-              { premises   :: [Proposition] 
-              , conclusion :: Proposition
-              } deriving (Show, Eq)  
+type Parser = Parsec Void Text 
 
-data TruthTable  = TT {headers :: Headers, rows :: [(Text,Bool)], validity :: Validity} deriving (Eq) 
-data PropTable   = PT {headersP :: PTHeaders, rowsP :: [Text]} deriving (Eq)
+parseEquiv :: Parser [Proposition]
+parseEquiv = do 
+   exp1 <- expr 
+   void $ lexer $ string ","
+   exp2 <- expr 
+   return $ [exp1, exp2]
+   
+spaceC :: Parser () 
+spaceC = L.space hspace1 CM.empty CM.empty 
 
-data PTHeaders = HeadersP {variablesP :: [Text], propositions :: [Text]} deriving (Eq)
+lexer :: Parser a -> Parser a 
+lexer = L.lexeme spaceC 
 
-data Headers = Headers 
-             {variables :: [Text] 
-             ,prems :: [Text]
-             ,conc :: Text 
-             }
-             deriving Eq
+parens :: Parser a -> Parser a
+parens = CM.between (string "(") (string ")") 
 
-data Validity = Valid | Invalid deriving (Eq, Show) 
+variable :: Parser Proposition
+variable =  lexer $ Var <$> upperChar 
 
-keyboard :: Text 
-keyboard = "Negation: ¬" 
-           <> "\nAnd: ∧" 
-           <> "\nOr: ∨" 
-           <> "\nIf Then: →" 
-           <> "\nExclusive Disjunction: ⊻" 
-           <> "\nBiconditional: ↔" 
-           <> "\nNand ⊼"
-           <> "\nNor ⊽"
+expr :: Parser Proposition
+expr = lexer $ makeExprParser term table 
 
-collectVars :: Proposition -> Text 
-collectVars prop = 
-   case prop of 
-    (Var c) -> T.singleton c 
-    (And prop1 prop2)  -> (collectVars prop1) <> (collectVars prop2) 
-    (Or prop1 prop2)   -> (collectVars prop1) <> (collectVars prop2) 
-    (Xor prop1 prop2)  -> (collectVars prop1) <> (collectVars prop2)
-    (Nand prop1 prop2) -> (collectVars prop1) <> (collectVars prop2)
-    (Nor prop1 prop2)  -> (collectVars prop1) <> (collectVars prop2)
-    (If  prop1 prop2)  -> (collectVars prop1) <> (collectVars prop2) 
-    (Iff prop1 prop2)  -> (collectVars prop1) <> (collectVars prop2)  
-    (Not prop)         -> collectVars prop
-parenthisize :: Text -> Text 
-parenthisize t = "( " <> t <> " )"
+term :: Parser Proposition
+term = lexer (parens expr <|> variable)
 
-showProp :: Proposition -> Text 
-showProp (Var c)           = T.singleton c 
-showProp (And prop1 prop2) = parenthisize $ (showProp prop1) <> " ∧ " <> (showProp prop2)
-showProp (Or prop1 prop2)  = parenthisize $ (showProp prop1) <> " ∨ " <> (showProp prop2) 
-showProp (Xor prop1 prop2) = parenthisize $ (showProp prop1) <> " ⊻ " <> (showProp prop2)
-showProp (Nand prop1 prop2) = parenthisize $ (showProp prop1) <> " ⊼ " <> (showProp prop2)
-showProp (Nor prop1 prop2)  = parenthisize $ (showProp prop1) <> " ⊽ " <> (showProp prop2)
-showProp (If prop1 prop2)  =  parenthisize $ (showProp prop1) <> " → " <> (showProp prop2) 
-showProp (Iff prop1 prop2) =  parenthisize $ (showProp prop1) <> " ↔ " <> (showProp prop2) 
-showProp (Not prop1)       = "~" <> (showProp prop1) 
+table :: [[Operator Parser Proposition]]
+table = [[Prefix (Not <$ (CM.choice  $ (lexer . string) <$> ["~", "¬", "!", "′" , "not"]))]
+        ,[InfixR (And <$ (CM.choice $ (lexer . string) <$> ["&", "∧", "·", "and"]))
+         ,InfixR (Or <$ (CM.choice $ (lexer . string) <$> ["||", "∨" ,"+", "∥", "or"]))
+         ,InfixR (If <$ (CM.choice $ (lexer . string) <$> ["->", "→", "⇒", "⊃"]))
+         ,InfixR (Xor <$ (CM.choice $ (lexer . string) <$> ["xor", "XOR" , "⊻", "⊕", "↮", "≢"]))
+         ,InfixR (Nand <$ (CM.choice $ (lexer . string) <$> ["nand", "NAND", "⊼"]))
+         ,InfixR (Nor <$ (CM.choice $ (lexer . string) <$> ["nor", "NOR", "⊽"]))
+         ,InfixR (Iff <$ (CM.choice $ (lexer . string) <$> ["<->", "⇔", "↔" , "≡"]))
+         ]
+        ]
 
+parseTherefore :: Parser Text
+parseTherefore = lexer $ CM.choice [string "%", string "∴", "therefore", "Therefore" , "THEREFORE"] 
 
-gen :: Text -> [Bool] -> [(Char,Char)]
-gen vars l =
-  T.zip vars (T.pack $ Prelude.map (\b -> if b then '1' else '0') (l))
+parseConclusion = do
+    void parseTherefore
+    lexer expr 
 
-fromVarEval :: [(Char,Char)] -> Text 
-fromVarEval evals = 
-   case evals of
-    []           -> T.empty 
-    ((_,v) : vs) -> v `T.cons` (fromVarEval vs) 
+parsePropositions :: Parser [Proposition]
+parsePropositions = do
+   void $ spaceC
+   props <- (sepEndBy1 (lexer expr) (lexer $ string ","))
+   eof
+   return $ props 
 
-evalProp :: Proposition -> [(Char,Char)] -> Bool 
-evalProp (Var c) assignment           =  let m = fromJust (Prelude.lookup c assignment) 
-                                         in if m == '1' then True else False 
-evalProp (And prop1 prop2) assignment = (evalProp prop1 assignment) && (evalProp prop2 assignment)  
-evalProp (Or prop1 prop2) assignment  = (evalProp prop1 assignment) || (evalProp prop2 assignment) 
-evalProp (Xor prop1 prop2) assignment = (evalProp prop1 assignment) /= (evalProp prop2 assignment)
-evalProp (Nand prop1 prop2) assignment = not ((evalProp prop1 assignment) && (evalProp prop2 assignment)) 
-evalProp (Nor prop1 prop2) assignment = (not $ evalProp prop1 assignment) && (not $ evalProp prop2 assignment)
-evalProp (If prop1 prop2) assignment  = (evalProp prop1 assignment) `if1` (evalProp prop2 assignment) 
-                                        where if1 :: Bool -> Bool -> Bool 
-                                              if1 True False = False
-                                              if1 _    _     = True 
-evalProp (Iff prop1 prop2) assignment = (evalProp prop1 assignment) == (evalProp prop2 assignment) 
-evalProp (Not prop1)       assignment = not $ evalProp prop1 assignment
+parseArgument :: Parser Argument
+parseArgument = do 
+   (prems,conc) <- manyTill_ ((lexer expr) <* (void $ lexer $ string ",") ) parseConclusion
+   (eof <|> (void newline))
+   return $ Argument {premises = prems, conclusion = conc}
 
-evalPremises :: [Proposition] -> [(Char,Char)] -> Text 
-evalPremises props assignment = 
-    case props of
-     [] -> T.empty 
-     (prop1 : props') -> (if (evalProp prop1 assignment) then '1' else '0') `T.cons` (evalPremises props' assignment)
-
- 
-f :: Argument -> [(Char,Char)] -> (Text, Bool)
-f arg varEvals = 
-  let prems = (evalPremises (premises arg) varEvals)  
-  in ((fromVarEval varEvals) <> prems <> (evalPremises ([conclusion arg]) varEvals) , T.all (== '1') prems)
-
-
-makePropTable :: Bool -> [Proposition] -> (PropTable, Maybe Bool)   
-makePropTable checkEq props = 
-       let vars      = T.pack $ Set.toList $ Set.fromList $ T.unpack $ mconcat $ collectVars <$> props 
-           combos    = replicateM (T.length vars) [True,False]
-           varRows   = (gen vars) <$> combos 
-           rows'     = (\varEval -> (fromVarEval varEval) <> (evalPremises props varEval)) <$> varRows
-           proptable = PT { headersP = HeadersP { variablesP = T.pack <$> L.singleton <$> (T.unpack vars)
-                                                , propositions = showProp <$> props 
-                                                }
-                          , rowsP    = rows'
-                          }
-           equivalence = case checkEq of 
-                          True -> let removedVars = (L.drop (T.length vars)) <$> (T.unpack <$> rows')
-                                  in  Just $ (L.all (== True)) $ (\r -> (L.all (== '1') r) || (L.all (== '0') r)) <$> removedVars
-                          False -> Nothing 
-       in (proptable, equivalence)
-      
-  
-makeTruthTable :: Argument -> TruthTable 
-makeTruthTable arg = 
-   let vars         =  T.pack $ Set.toList $ Set.fromList $ T.unpack $ (mconcat $ Prelude.map collectVars ((conclusion arg) : premises arg)) 
-       combos       =  (replicateM (T.length vars) [True,False])
-       varRows      = (Prelude.map (gen vars) combos)
-       rows'        = (f arg) <$> varRows 
-   in TT 
-      { headers = Headers
-                { variables = (T.pack <$> L.singleton <$> (T.unpack vars))
-                , prems     = (Prelude.map showProp(premises arg))
-                , conc      = showProp (conclusion arg)
-                }
-      , rows    =  rows'
-      , validity = let removedVars = (L.drop (T.length vars)) <$> (T.unpack <$> fst <$> rows')
-                       removeLastEl = (\l -> (\l2 -> (l2, L.last l)) . L.reverse . (L.drop 1) . L.reverse $ l) <$> removedVars  
-                       cond         = let allTrue = L.filter (\(l,_) -> L.all (== '1') l) removeLastEl
-                                      in case allTrue of
-                                          [] -> True
-                                          _  -> L.all (\(l,c) -> c == '1') allTrue 
-                   in case cond of
-                       True -> Valid
-                       False -> Invalid
-                                              
-      } 
- 
-
-{-
-emptyEmbed :: Embed
-emptyEmbed = Embed 
-           { title = Nothing
-           , type_ = Nothing
-           , description = Nothing
-           , url = Nothing
-           , timestamp = Nothing
-           , color = Nothing
-           , footer = Nothing
-           , image = Nothing
-           , thumbnail = Nothing
-           , video = Nothing
-           , provider = Nothing
-           , author = Nothing
-           , fields = [] 
-           } 
--}
-            
+parseErrorMsg :: Parser String 
+parseErrorMsg = do 
+   input <- do
+      void $ skipManyTill (anySingle) newline 
+      void $ skipManyTill (anySingle) newline 
+      void $ lexer $ many alphaNumChar 
+      void $ lexer $ (string "|")
+      manyTill anySingle newline 
+   unexpectedThing <- manyTill anySingle (string "expecting")
+   case input of 
+      "<empty line>" -> return $ "Argument must have at least one premise and a conclusion\n"  <>
+                                  "Unexpected: " <> unexpectedThing <>
+                                  "Your input: " <> input 
+      _              ->
+         let wordsS = Prelude.words input 
+         in case (Prelude.all (== True)) $ (\t -> not $ t `Prelude.elem` wordsS) <$> ["therefore" , "Therefore","%","∴"] of 
+             True  -> return $ "Argument is missing a therefore symbol and\n" <> "unexpected " <> unexpectedThing <> "\nYour input: " <> input
+             False -> return $ "Unexpected " <> unexpectedThing <> "\nYour input: " <> input
+   
