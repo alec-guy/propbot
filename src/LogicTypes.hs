@@ -37,7 +37,7 @@ data Argument = Argument
 data TruthTable  = TT {headers :: Headers, rows :: [(Text,Bool)], validity :: Validity} deriving (Eq) 
 data PropTable   = PT {headersP :: PTHeaders, rowsP :: [Text]} deriving (Eq)
 
-data PTHeaders = HeadersP {variablesP :: [Text], propositions :: (Text,Text)} deriving (Eq)
+data PTHeaders = HeadersP {variablesP :: [Text], propositions :: [Text]} deriving (Eq)
 
 data Headers = Headers 
              {variables :: [Text] 
@@ -123,20 +123,21 @@ f arg varEvals =
   in ((fromVarEval varEvals) <> prems <> (evalPremises ([conclusion arg]) varEvals) , T.all (== '1') prems)
 
 
-fromEquiv :: (Proposition, Proposition) -> (PropTable, Bool)   
-fromEquiv (prop1, prop2)  = 
-       let props     =  [prop1,prop2]
-           vars      = T.pack $ Set.toList $ Set.fromList $ T.unpack $ mconcat $ collectVars <$> props 
+makePropTable :: Bool -> [Proposition] -> (PropTable, Maybe Bool)   
+makePropTable checkEq props = 
+       let vars      = T.pack $ Set.toList $ Set.fromList $ T.unpack $ mconcat $ collectVars <$> props 
            combos    = replicateM (T.length vars) [True,False]
            varRows   = (gen vars) <$> combos 
            rows'     = (\varEval -> (fromVarEval varEval) <> (evalPremises props varEval)) <$> varRows
            proptable = PT { headersP = HeadersP { variablesP = T.pack <$> L.singleton <$> (T.unpack vars)
-                                                , propositions = (showProp prop1, showProp prop2)
+                                                , propositions = showProp <$> props 
                                                 }
                           , rowsP    = rows'
                           }
-           equivalence = let removedVars = (L.drop (T.length vars)) <$> (T.unpack <$> rows')
-                         in  (L.all (== True)) $ (\r -> (L.all (== '1') r) || (L.all (== '0') r)) <$> removedVars
+           equivalence = case checkEq of 
+                          True -> let removedVars = (L.drop (T.length vars)) <$> (T.unpack <$> rows')
+                                  in  Just $ (L.all (== True)) $ (\r -> (L.all (== '1') r) || (L.all (== '0') r)) <$> removedVars
+                          False -> Nothing 
        in (proptable, equivalence)
       
   
