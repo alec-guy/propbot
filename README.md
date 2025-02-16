@@ -4,7 +4,11 @@
 Propbot is a tool for validating logical arguments and generating truth tables. Here are the available commands:
 
 ## Commands
-
+### `!table` 
+- **Description:** Outputs a truth table from a set of propositions. 
+- **Synatx:** `!table Premise1, Premise2, PremiseN...`
+- **Example:** `!table P`
+- **Eample2:** `!table P or Q, P and Q`
 ### `!help`
 - **Description:** Displays a list of commands.
 
