@@ -70,12 +70,24 @@ main =  do
         DiPolysemy.info @T.Text "Setting up commands and handlers.."  
         addCommands $ do
           helpCommand
-          Commands.command @'[] "keyboard" $ \ctx -> 
-               void $ tell ctx (intoMsg keyboard)
+          Commands.command @'[] "keyboard" $ \ctx -> void $ tell ctx (intoMsg keyboard)
+          Commands.command @'[[T.Text]] "table" $ \ctx expressions1 -> 
+               let response = case Megapars.parse parsePropositions "" (mconcat $ L.intersperse " " expressions1)of 
+                               Left e -> Left $ errorBundlePretty e 
+                               Right p -> Right $ ptToHtml $ makePropTable False p  
+               in case response of 
+                  Left s -> void $ tell ctx (intoMsg $ T.pack s)
+                  Right ht -> do 
+                       html' <- P.embed $ webpage "proptable.css" ht 
+                       void $ P.embed  $ BS.writeFile "proptable.html" (E.encodeUtf8 $  TL.toStrict $ renderHtml html')
+                       void $ P.embed $ (callProcess "wkhtmltoimage" [ "proptable.html", "proptable.jpg"])
+                       tableBS <- P.embed $ BS.readFile "proptable.jpg"
+                       void $ tell ctx (intoMsg $ messageOptions tableBS) 
           Commands.command @'[[T.Text]] "equiv" $ \ctx expressions -> 
               let response = case Megapars.parse parseEquiv "" (mconcat $ L.intersperse " " expressions) of 
                               Left e  -> Left (errorBundlePretty e)
-                              Right p -> Right $ ptToHtml $ fromEquiv p
+                              Right p -> Right $ ptToHtml $ makePropTable True p
+
               in case response of 
                   Left  s  -> void $ tell ctx (intoMsg $ T.pack s)
                   Right ht -> do 
@@ -120,15 +132,15 @@ webpage filename table = do
        (H.head $ (H.style $ (toHtml css)) <> (H.meta Blaze.! (HA.charset "UTF-8")))  <> 
          (H.body table) 
 
-ptToHtml :: (PropTable,Bool) -> H.Html 
+ptToHtml :: (PropTable,Maybe Bool) -> H.Html 
 ptToHtml (proptable, equivalent) = 
     let headers' = case (headersP proptable) of 
-                    (HeadersP{variablesP=v1,propositions = _})  -> 
+                    (HeadersP{variablesP=v1,propositions = props})  -> 
                         H.tr 
                         $
                         (H.th (toHtml ("Variables" :: T.Text))) Blaze.! (HA.colspan $ fromString $ show $ (L.length v1))
                         <> 
-                        (H.th (toHtml ("Propositions" :: T.Text)) Blaze.! (HA.colspan "2"))
+                        (H.th (toHtml ("Propositions" :: T.Text)) Blaze.! (HA.colspan $ fromString $ show $ (L.length props)))
         table    = H.table 
                    $ 
                    H.thead 
@@ -137,9 +149,7 @@ ptToHtml (proptable, equivalent) =
                    headers' 
                    <> H.tr (mconcat $ [(H.th $ toHtml $ T.unpack v) Blaze.! (HA.style "min-width: 80px") | v <- (variablesP $ headersP proptable)]  
                                       <> 
-                                      [(H.th $ toHtml $ T.unpack (fst $ propositions $ headersP proptable)) Blaze.! (HA.style "min-width: 120px")
-                                      , (H.th $ toHtml $ T.unpack (snd $ propositions $ headersP proptable)) Blaze.! (HA.style "min-width: 120px")
-                                      ]
+                                      [(H.th $ toHtml $ T.unpack prop) Blaze.! (HA.style "min-width: 120px") | prop <- (propositions $ headersP proptable)]
                            )
                    ) 
                    <> 
@@ -154,7 +164,10 @@ ptToHtml (proptable, equivalent) =
                                          ] 
                               ]
                )
-    in (H.h2 $ toHtml ("These Propositions are Logicially " <> (if equivalent then "Equivalent" :: T.Text else "Inequivalent" :: T.Text))  ) <> table
+    in case equivalent of 
+        Nothing  -> (H.h2 $ toHtml ("Truth-Table" :: T.Text)) <> table 
+        (Just b) -> (H.h2 $ toHtml ("These Propositions are Logicially " <> (if b then "Equivalent" :: T.Text else "Inequivalent" :: T.Text))  ) <> table
+
 ttToHtml :: TruthTable -> H.Html  
 ttToHtml tt = 
    let headers' = case headers tt of 
