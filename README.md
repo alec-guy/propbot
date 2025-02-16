@@ -33,6 +33,6 @@ Propbot is a tool for validating logical arguments and generating truth tables. 
   ```bash
   !check P, P -> Q, % P
 
-If I am offline its because I am working. 
+If I am offline its because I  the creator, am working or not working on something, which is a tautology. 
 
 Installation link = https://discord.com/oauth2/authorize?client_id=1338255110798704736
